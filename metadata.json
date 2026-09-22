@@ -1,0 +1,6 @@
+{
+  "name": "AI Learning Navigator by Profession",
+  "description": "Personalized AI learning pathways, free verified certificate courses, tools, and roadmaps tailored to your profession and skill level.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
