@@ -630,6 +630,13 @@ export default function App() {
                 roadmap={currentProfession.roadmap}
                 completedMilestones={completedMilestones}
                 onToggleMilestone={handleToggleMilestone}
+                professionTitle={currentProfession.title}
+                professionCategory={currentProfession.category}
+                userName={userProfile?.name}
+                completedCoursesCount={completedCourseIds.length}
+                totalCoursesCount={availableCourses.length}
+                keySkills={currentProfession.keySkillsNeeded}
+                onNotify={showToast}
               />
             )}
 
