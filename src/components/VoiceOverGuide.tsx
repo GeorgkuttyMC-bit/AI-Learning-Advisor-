@@ -6,7 +6,6 @@ import {
   ChevronRight, 
   ChevronLeft, 
   X, 
-  Volume2, 
   Bot,
   Globe2,
   BookOpen
@@ -15,7 +14,9 @@ import {
   VOICE_TOUR_STEPS, 
   VoiceTourStep, 
   VoiceLanguage, 
-  getAvailableMaleVoice 
+  resolveVoiceForLanguage,
+  splitTextIntoSentences,
+  AudioVoiceConfig
 } from '../utils/voiceOverScripts';
 
 interface VoiceOverGuideProps {
@@ -29,7 +30,6 @@ interface BotCoordinates {
   visible: boolean;
 }
 
-// Module-level and window reference to prevent Chrome V8 garbage collection from aborting speech midway
 declare global {
   interface Window {
     __guideBotUtterance?: SpeechSynthesisUtterance | null;
@@ -57,6 +57,7 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
   const [showMiniControls, setShowMiniControls] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
+  const [voicesReady, setVoicesReady] = useState(false);
 
   // Dynamic bot coordinates for section tracking
   const [botCoords, setBotCoords] = useState<BotCoordinates>({
@@ -65,9 +66,9 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
     visible: false
   });
 
-  // References
+  // Unique token to track and invalidate previous sentence queues
+  const tourTokenRef = useRef(0);
   const isPlayingRef = useRef(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Synchronize playing ref
   useEffect(() => {
@@ -88,7 +89,10 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     const warmUpVoices = () => {
-      window.speechSynthesis.getVoices();
+      const v = window.speechSynthesis.getVoices();
+      if (v && v.length > 0) {
+        setVoicesReady(true);
+      }
     };
 
     warmUpVoices();
@@ -99,20 +103,6 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
         window.speechSynthesis.onvoiceschanged = null;
       }
     };
-  }, []);
-
-  // Chrome SpeechSynthesis keep-alive: resets Chrome's internal 15s watchdog so it never stops midway
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-
-    const keepAlive = setInterval(() => {
-      if (isPlayingRef.current && window.speechSynthesis.speaking) {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-      }
-    }, 3500);
-
-    return () => clearInterval(keepAlive);
   }, []);
 
   // Remove DOM spotlight highlights
@@ -226,6 +216,120 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
     };
   }, [isBotActive, currentStepIndex, calculateBotCoordinates]);
 
+  // Stop current speech and clear highlights
+  const stopSpeech = () => {
+    tourTokenRef.current++;
+    isPlayingRef.current = false;
+    activeSpeechUtterance = null;
+    if (typeof window !== 'undefined') {
+      window.__guideBotUtterance = null;
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    }
+    setIsPlaying(false);
+    clearDomHighlights();
+  };
+
+  // Play a specific step using sentence chunking for 100% reliable mobile & desktop playback
+  const playStep = (index: number, activeLang = language) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    // Token to invalidate any active sentence loop
+    const currentToken = ++tourTokenRef.current;
+
+    // Clear previous speech safely
+    window.speechSynthesis.cancel();
+
+    const step = VOICE_TOUR_STEPS[index];
+    if (!step) return;
+
+    isPlayingRef.current = true;
+    setCurrentStepIndex(index);
+    setIsPlaying(true);
+    setIsBotActive(true);
+
+    // 1. Notify parent to switch tab / scroll view immediately
+    if (onHighlightSection) {
+      onHighlightSection(step.targetSection);
+    }
+
+    // 2. Visually highlight target section and fly bot to it
+    applyDomHighlightAndMove(step.elementSelector);
+
+    // 3. Resolve voice configuration and fallback safely
+    const voiceConfig = resolveVoiceForLanguage(activeLang);
+
+    // If user selected Malayalam ('ml') and device has Malayalam TTS voice, speak Malayalam text.
+    // If device has NO Malayalam voice installed, speak English text with Indian/English voice so audio NEVER fails or stays silent!
+    const textToSpeak = (activeLang === 'ml' && voiceConfig.hasNativeLanguageVoice)
+      ? step.textMl
+      : step.textEn;
+
+    // Split text into short, natural sentences so buffer never overflows
+    const sentences = splitTextIntoSentences(textToSpeak);
+
+    // Give browser audio engine 40ms to reset after cancel()
+    setTimeout(() => {
+      if (tourTokenRef.current !== currentToken || !isPlayingRef.current) return;
+
+      const speakSentence = (sIndex: number) => {
+        if (tourTokenRef.current !== currentToken || !isPlayingRef.current) return;
+
+        // When all sentences in this step are completed, automatically advance to next step
+        if (sIndex >= sentences.length) {
+          if (index < VOICE_TOUR_STEPS.length - 1) {
+            playStep(index + 1, activeLang);
+          } else {
+            isPlayingRef.current = false;
+            setIsPlaying(false);
+            clearDomHighlights();
+          }
+          return;
+        }
+
+        const sentenceText = sentences[sIndex];
+        const utterance = new SpeechSynthesisUtterance(sentenceText);
+        activeSpeechUtterance = utterance;
+        window.__guideBotUtterance = utterance;
+
+        if (voiceConfig.voice) {
+          utterance.voice = voiceConfig.voice;
+        }
+        utterance.lang = voiceConfig.langCode;
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        utterance.onend = () => {
+          if (tourTokenRef.current === currentToken && isPlayingRef.current) {
+            speakSentence(sIndex + 1);
+          }
+        };
+
+        utterance.onerror = (e) => {
+          console.warn('TTS sentence event:', e);
+          if (tourTokenRef.current === currentToken && isPlayingRef.current) {
+            setTimeout(() => {
+              if (tourTokenRef.current === currentToken && isPlayingRef.current) {
+                speakSentence(sIndex + 1);
+              }
+            }, 30);
+          }
+        };
+
+        // Resume if browser engine paused
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+
+        window.speechSynthesis.speak(utterance);
+      };
+
+      // Start sentence queue
+      speakSentence(0);
+    }, 40);
+  };
+
   // Persist language choice
   const handleToggleLanguage = (newLang: VoiceLanguage) => {
     setLanguage(newLang);
@@ -244,20 +348,6 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
 
   const currentStep = VOICE_TOUR_STEPS[currentStepIndex];
 
-  // Stop current speech and clear highlights
-  const stopSpeech = () => {
-    isPlayingRef.current = false;
-    activeSpeechUtterance = null;
-    if (typeof window !== 'undefined') {
-      window.__guideBotUtterance = null;
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-    }
-    setIsPlaying(false);
-    clearDomHighlights();
-  };
-
   // Close bot guide completely
   const handleCloseBot = () => {
     stopSpeech();
@@ -266,122 +356,18 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
     setShowTranscript(false);
   };
 
-  // Play a specific step
-  const playStep = (index: number, activeLang = language) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-
-    // Cancel any previous speech
-    window.speechSynthesis.cancel();
-
-    const step = VOICE_TOUR_STEPS[index];
-    if (!step) return;
-
-    // Immediately mark playing state synchronously
-    isPlayingRef.current = true;
-    setCurrentStepIndex(index);
-    setIsPlaying(true);
-    setIsBotActive(true);
-
-    // 1. Notify parent to switch tab / scroll view immediately
-    if (onHighlightSection) {
-      onHighlightSection(step.targetSection);
-    }
-
-    // 2. Visually highlight target section and fly bot to it
-    applyDomHighlightAndMove(step.elementSelector);
-
-    // 3. Synthesize articulate male voice narration
-    const textToSpeak = activeLang === 'ml' ? step.textMl : step.textEn;
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utteranceRef.current = utterance;
-
-    // Retain persistent reference so Chrome V8 garbage collection does not drop onend
-    activeSpeechUtterance = utterance;
-    window.__guideBotUtterance = utterance;
-
-    // Pitch: 0.88 gives an articulate, deep male vocal register
-    utterance.pitch = 0.88;
-    utterance.rate = 0.95;
-
-    // Set language and male voice
-    if (activeLang === 'ml') {
-      utterance.lang = 'ml-IN';
-    } else {
-      utterance.lang = 'en-US';
-    }
-
-    const maleVoice = getAvailableMaleVoice(activeLang);
-    if (maleVoice) {
-      utterance.voice = maleVoice;
-    }
-
-    // Auto-resume if Chrome fires unexpected pause
-    utterance.onpause = () => {
-      if (isPlayingRef.current && window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-    };
-
-    utterance.onend = () => {
-      // Clear references
-      activeSpeechUtterance = null;
-      window.__guideBotUtterance = null;
-
-      // Automatically advance to the next step
-      if (isPlayingRef.current && index < VOICE_TOUR_STEPS.length - 1) {
-        // Brief 50ms tick allows the browser audio pipeline to reset cleanly
-        setTimeout(() => {
-          if (isPlayingRef.current) {
-            playStep(index + 1, activeLang);
-          }
-        }, 50);
-      } else {
-        isPlayingRef.current = false;
-        setIsPlaying(false);
-        clearDomHighlights();
-      }
-    };
-
-    utterance.onerror = (e) => {
-      console.warn('SpeechSynthesis event notice:', e);
-      activeSpeechUtterance = null;
-      window.__guideBotUtterance = null;
-
-      // If stopped or interrupted unexpectedly while tour is active, advance
-      if (isPlayingRef.current && index < VOICE_TOUR_STEPS.length - 1) {
-        setTimeout(() => {
-          if (isPlayingRef.current) {
-            playStep(index + 1, activeLang);
-          }
-        }, 50);
-      } else {
-        isPlayingRef.current = false;
-        setIsPlaying(false);
-        clearDomHighlights();
-      }
-    };
-
-    window.speechSynthesis.speak(utterance);
-  };
-
   // Toggle Play / Pause
   const handleTogglePlay = () => {
     if (isPlaying) {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.pause();
-      }
-      setIsPlaying(false);
-      clearDomHighlights();
+      stopSpeech();
     } else {
-      if (typeof window !== 'undefined' && window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-        setIsPlaying(true);
-        if (currentStep) {
-          applyDomHighlightAndMove(currentStep.elementSelector);
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
         }
-      } else {
-        playStep(currentStepIndex, language);
       }
+      playStep(currentStepIndex, language);
     }
   };
 
@@ -389,29 +375,38 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
   const handleNextStep = () => {
     const nextIdx = Math.min(VOICE_TOUR_STEPS.length - 1, currentStepIndex + 1);
     stopSpeech();
-    playStep(nextIdx, language);
+    setTimeout(() => {
+      playStep(nextIdx, language);
+    }, 40);
   };
 
   const handlePrevStep = () => {
     const prevIdx = Math.max(0, currentStepIndex - 1);
     stopSpeech();
-    playStep(prevIdx, language);
+    setTimeout(() => {
+      playStep(prevIdx, language);
+    }, 40);
   };
 
   const handleReplayCurrent = () => {
     stopSpeech();
-    playStep(currentStepIndex, language);
+    setTimeout(() => {
+      playStep(currentStepIndex, language);
+    }, 40);
   };
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      tourTokenRef.current++;
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
       clearDomHighlights();
     };
   }, []);
+
+  const voiceConfig = resolveVoiceForLanguage(language);
 
   return (
     <div id="voiceover-chatbot-controller">
@@ -444,7 +439,7 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
                 ? 'bg-indigo-600 text-white shadow-2xs font-extrabold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
-            title="മലയാളത്തിൽ ഗൈഡ് ബോട്ട് കേൾക്കുക (Male Voice)"
+            title="മലയാളത്തിൽ ഗൈഡ് ബോട്ട് കേൾക്കുക"
           >
             <span>🇮🇳</span>
             <span>മലയാളം</span>
@@ -484,7 +479,7 @@ export const VoiceOverGuide: React.FC<VoiceOverGuideProps> = ({
             <>
               <Bot className="w-4 h-4 text-indigo-600" />
               <span className="hidden sm:inline">
-                {language === 'ml' ? 'ഗൈഡ് ബോട്ട് (Male)' : 'AI Guide Bot (Male)'}
+                {language === 'ml' ? 'ഗൈഡ് ബോട്ട്' : 'AI Guide Bot'}
               </span>
               <span className="sm:hidden">Bot</span>
             </>

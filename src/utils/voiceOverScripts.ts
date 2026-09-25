@@ -133,29 +133,63 @@ export const VOICE_TOUR_STEPS: VoiceTourStep[] = [
 export const FULL_TOUR_TEXT_EN = VOICE_TOUR_STEPS.map(s => s.textEn).join(" ");
 export const FULL_TOUR_TEXT_ML = VOICE_TOUR_STEPS.map(s => s.textMl).join(" ");
 
+export interface AudioVoiceConfig {
+  voice: SpeechSynthesisVoice | null;
+  langCode: string;
+  hasNativeLanguageVoice: boolean;
+  isMaleVoice: boolean;
+}
+
 /**
- * Find best male voice available in the client browser
+ * Split text into short, natural sentence chunks so mobile browser speech buffers never overflow
  */
-export function getAvailableMaleVoice(lang: VoiceLanguage): SpeechSynthesisVoice | null {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices || voices.length === 0) return null;
+export function splitTextIntoSentences(text: string): string[] {
+  if (!text) return [];
+  // Split on sentence boundaries: period, exclamation mark, question mark, or colon
+  const chunks = text
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+  return chunks.length > 0 ? chunks : [text];
+}
+
+/**
+ * Resolves the best available voice with safe fallbacks so audio never fails on mobile/desktop
+ */
+export function resolveVoiceForLanguage(lang: VoiceLanguage): AudioVoiceConfig {
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    return { voice: null, langCode: 'en-US', hasNativeLanguageVoice: false, isMaleVoice: true };
+  }
+  const voices = window.speechSynthesis.getVoices() || [];
 
   if (lang === 'ml') {
-    // 1. Look for exact Malayalam voices
-    const mlVoices = voices.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith('ml'));
-    if (mlVoices.length > 0) {
-      const maleMl = mlVoices.find(v => 
-        /male|man|guy|valluvar|gokul|vijay|midhun|arun/i.test(v.name)
-      );
-      return maleMl || mlVoices[0];
+    // 1. Check for genuine Malayalam voice on the device
+    const mlVoice = voices.find(v => {
+      const l = v.lang.toLowerCase().replace('_', '-');
+      return l.startsWith('ml') || v.name.toLowerCase().includes('malayalam');
+    });
+
+    if (mlVoice) {
+      return { 
+        voice: mlVoice, 
+        langCode: mlVoice.lang || 'ml-IN', 
+        hasNativeLanguageVoice: true, 
+        isMaleVoice: /male|man|gokul|midhun|arun/i.test(mlVoice.name) 
+      };
     }
 
-    // 2. Look for Indian regional male voice
-    const inVoices = voices.filter(v => v.lang.toLowerCase().includes('in'));
-    const maleIn = inVoices.find(v => /male|ravi|george|david|prabhat|karan|neerja/i.test(v.name));
-    if (maleIn) return maleIn;
-    if (inVoices.length > 0) return inVoices[0];
+    // 2. If device has no Malayalam voice installed, use Indian English male voice safely
+    const inVoice = voices.find(v => v.lang.toLowerCase().includes('in') && /male|ravi|george|david|prabhat/i.test(v.name))
+      || voices.find(v => v.lang.toLowerCase().includes('in'));
+
+    if (inVoice) {
+      return { 
+        voice: inVoice, 
+        langCode: inVoice.lang || 'en-IN', 
+        hasNativeLanguageVoice: false, 
+        isMaleVoice: true 
+      };
+    }
   }
 
   // English male voice:
@@ -179,8 +213,22 @@ export function getAvailableMaleVoice(lang: VoiceLanguage): SpeechSynthesisVoice
   
   for (const kw of maleKeywords) {
     const found = enVoices.find(v => v.name.toLowerCase().includes(kw));
-    if (found) return found;
+    if (found) return { voice: found, langCode: found.lang || 'en-US', hasNativeLanguageVoice: true, isMaleVoice: true };
   }
 
-  return enVoices[0] || voices[0] || null;
+  const defaultVoice = enVoices[0] || voices[0] || null;
+  return { 
+    voice: defaultVoice, 
+    langCode: defaultVoice?.lang || 'en-US', 
+    hasNativeLanguageVoice: true, 
+    isMaleVoice: true 
+  };
 }
+
+/**
+ * Find best male voice available in the client browser
+ */
+export function getAvailableMaleVoice(lang: VoiceLanguage): SpeechSynthesisVoice | null {
+  return resolveVoiceForLanguage(lang).voice;
+}
+
