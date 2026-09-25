@@ -21,6 +21,18 @@ export interface UserProfile {
   formatPreference: FormatPreference;
 }
 
+export interface UserAccount {
+  name: string;
+  avatarColor?: string;
+  avatarEmoji?: string;
+  createdAt: string;
+  lastActive: string;
+  profile?: UserProfile;
+  savedCourseIds?: string[];
+  completedCourseIds?: string[];
+  completedMilestones?: Record<number, boolean>;
+}
+
 export interface CourseResource {
   id: string;
   title: string;

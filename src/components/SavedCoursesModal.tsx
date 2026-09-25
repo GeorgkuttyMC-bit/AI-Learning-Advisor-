@@ -104,10 +104,11 @@ export const SavedCoursesModal: React.FC<SavedCoursesModalProps> = ({
                       href={course.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
-                      title="Open course in new tab"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                      title={`Direct link to ${course.title} and student login`}
                     >
-                      <ExternalLink className="w-4 h-4" />
+                      <span>Direct Login</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </a>
 
                     <button

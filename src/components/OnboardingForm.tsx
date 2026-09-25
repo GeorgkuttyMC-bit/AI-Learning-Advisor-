@@ -35,6 +35,9 @@ import { ProfessionDropdown } from './ProfessionDropdown';
 interface OnboardingFormProps {
   onSubmit: (profile: UserProfile) => void;
   isLoadingCustom?: boolean;
+  currentUserName?: string | null;
+  onOpenLoginModal?: () => void;
+  onSwitchUser?: () => void;
 }
 
 // Map icon strings to Lucide components
@@ -120,7 +123,13 @@ export const PROFESSION_VISUALS: Record<string, { image: string; color: string; 
   }
 };
 
-export const OnboardingForm: React.FC<OnboardingFormProps> = ({ onSubmit, isLoadingCustom = false }) => {
+export const OnboardingForm: React.FC<OnboardingFormProps> = ({ 
+  onSubmit, 
+  isLoadingCustom = false,
+  currentUserName,
+  onOpenLoginModal,
+  onSwitchUser
+}) => {
   const [selectedProfessionId, setSelectedProfessionId] = useState<string>('software_engineering');
   const [customTitle, setCustomTitle] = useState<string>('');
   const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
@@ -128,8 +137,15 @@ export const OnboardingForm: React.FC<OnboardingFormProps> = ({ onSubmit, isLoad
   const [primaryGoal, setPrimaryGoal] = useState<PrimaryGoal>('free_certificates');
   const [weeklyHours, setWeeklyHours] = useState<WeeklyHours>('3-5');
   const [formatPreference, setFormatPreference] = useState<FormatPreference>('all');
-  const [name, setName] = useState<string>('');
+  const [name, setName] = useState<string>(currentUserName || '');
   const [selectionView, setSelectionView] = useState<'dropdown' | 'grid'>('dropdown');
+
+  // Keep name synced with currentUserName if changed externally
+  React.useEffect(() => {
+    if (currentUserName) {
+      setName(currentUserName);
+    }
+  }, [currentUserName]);
 
   // User-friendly search & category filtering for professions
   const [roleSearch, setRoleSearch] = useState<string>('');
@@ -181,7 +197,7 @@ export const OnboardingForm: React.FC<OnboardingFormProps> = ({ onSubmit, isLoad
     });
   };
 
-  const handlePillarAction = (actionType: 'curriculum' | 'certificates' | 'mentor') => {
+  const handlePillarAction = (actionType: 'curriculum' | 'certificates' | 'toolkit') => {
     if (actionType === 'certificates') {
       setPrimaryGoal('free_certificates');
     }
@@ -238,6 +254,67 @@ export const OnboardingForm: React.FC<OnboardingFormProps> = ({ onSubmit, isLoad
 
       {/* 3. Interactive Intake Form */}
       <form onSubmit={handleSubmit} className="bg-white border border-slate-200/90 rounded-3xl shadow-lg shadow-slate-100 p-6 sm:p-10 space-y-10" id="onboarding-form">
+        {/* User Account Login Banner */}
+        {currentUserName ? (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-purple-50/50 to-indigo-50/90 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                {currentUserName.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-700">Learner Profile</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+                <p className="text-sm font-extrabold text-slate-900">
+                  Logged in as <span className="text-indigo-600">{currentUserName}</span>
+                </p>
+                <p className="text-xs text-slate-500">Your badges and progress will stay saved to this profile.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onSwitchUser && (
+                <button
+                  type="button"
+                  onClick={onSwitchUser}
+                  className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 hover:text-indigo-600 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+                >
+                  Switch User / Name
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shadow-xs">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900">
+                  Have an account or want to log in with your name?
+                </p>
+                <p className="text-xs text-slate-500">
+                  Log in simply using your name to keep your free certificates and roadmap saved.
+                </p>
+              </div>
+            </div>
+
+            {onOpenLoginModal && (
+              <button
+                type="button"
+                onClick={onOpenLoginModal}
+                id="onboarding-login-prompt-btn"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer shrink-0"
+              >
+                <span>Log In with Name</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Step 1: Profession Selection with Dropdown Menu & Grid Toggle */}
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -612,14 +689,14 @@ export const OnboardingForm: React.FC<OnboardingFormProps> = ({ onSubmit, isLoad
           <div>
             <label className="block text-sm font-extrabold text-slate-900 mb-1 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] font-bold flex items-center justify-center">5</span>
-              <span>Your Name (Optional)</span>
+              <span>Your Name</span>
             </label>
-            <p className="text-xs text-slate-500 mb-2">Personalizes your certificate tracker and exportable guide.</p>
+            <p className="text-xs text-slate-500 mb-2">Logs you into your account and personalizes your certificate tracker.</p>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Maria, David, Sam..."
+              placeholder="e.g. George, Sarah, Alex..."
               id="user-name-input"
               className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-sm"
             />

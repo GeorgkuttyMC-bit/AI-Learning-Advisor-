@@ -15,30 +15,55 @@ import {
   ExternalLink,
   ShieldCheck,
   Bookmark,
-  X
+  X,
+  User,
+  SlidersHorizontal
 } from 'lucide-react';
-import { UserProfile, ProfessionData, CourseResource } from './types';
+import { UserProfile, ProfessionData, CourseResource, UserAccount } from './types';
 import { PROFESSIONS_DATA } from './data/professions';
 import { GLOBAL_FREE_CERTIFICATE_COURSES } from './data/courses';
 import { Header } from './components/Header';
+import { SidebarNav } from './components/SidebarNav';
+import { LearnerProfilePanel } from './components/LearnerProfilePanel';
+import { DashboardOverview } from './components/DashboardOverview';
 import { OnboardingForm } from './components/OnboardingForm';
 import { ProfessionOverview } from './components/ProfessionOverview';
 import { CourseCard } from './components/CourseCard';
 import { ToolsList } from './components/ToolsList';
 import { RoadmapTimeline } from './components/RoadmapTimeline';
 import { PromptVault } from './components/PromptVault';
-import { AIMentorModal } from './components/AIMentorModal';
 import { SavedCoursesModal } from './components/SavedCoursesModal';
 import { ExportModal } from './components/ExportModal';
 import { CertificateGuideModal } from './components/CertificateGuideModal';
-import { LearningProgressCard } from './components/LearningProgressCard';
-import { FloatingAdvisorButton } from './components/FloatingAdvisorButton';
+import { NameLoginModal } from './components/NameLoginModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
+import { 
+  getCurrentUserName, 
+  setCurrentUserName, 
+  getUserAccount, 
+  saveUserAccount, 
+  loginOrCreateUser 
+} from './utils/userStorage';
 
 export default function App() {
+  // Current logged in user name & account
+  const [currentUserName, setCurrentUserNameState] = useState<string | null>(() => {
+    return getCurrentUserName();
+  });
+
+  const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(() => {
+    const name = getCurrentUserName();
+    return name ? getUserAccount(name) : null;
+  });
+
   // User Profile State
   const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
     try {
+      const activeName = getCurrentUserName();
+      if (activeName) {
+        const acc = getUserAccount(activeName);
+        if (acc?.profile) return acc.profile;
+      }
       const saved = localStorage.getItem('ai_learning_user_profile');
       return saved ? JSON.parse(saved) : null;
     } catch {
@@ -49,9 +74,17 @@ export default function App() {
   // Active View Tab
   const [activeTab, setActiveTab] = useState<'all' | 'courses' | 'tools' | 'roadmap' | 'prompts'>('all');
 
+  // Mobile sidebar drawer state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
   // Bookmarking & Progress State
   const [savedCourseIds, setSavedCourseIds] = useState<string[]>(() => {
     try {
+      const activeName = getCurrentUserName();
+      if (activeName) {
+        const acc = getUserAccount(activeName);
+        if (acc?.savedCourseIds && acc.savedCourseIds.length > 0) return acc.savedCourseIds;
+      }
       const saved = localStorage.getItem('ai_learning_saved_courses');
       return saved ? JSON.parse(saved) : [];
     } catch {
@@ -61,6 +94,11 @@ export default function App() {
 
   const [completedCourseIds, setCompletedCourseIds] = useState<string[]>(() => {
     try {
+      const activeName = getCurrentUserName();
+      if (activeName) {
+        const acc = getUserAccount(activeName);
+        if (acc?.completedCourseIds && acc.completedCourseIds.length > 0) return acc.completedCourseIds;
+      }
       const saved = localStorage.getItem('ai_learning_completed_courses');
       return saved ? JSON.parse(saved) : [];
     } catch {
@@ -70,6 +108,13 @@ export default function App() {
 
   const [completedMilestones, setCompletedMilestones] = useState<Record<number, boolean>>(() => {
     try {
+      const activeName = getCurrentUserName();
+      if (activeName) {
+        const acc = getUserAccount(activeName);
+        if (acc?.completedMilestones && Object.keys(acc.completedMilestones).length > 0) {
+          return acc.completedMilestones;
+        }
+      }
       const saved = localStorage.getItem('ai_learning_milestones');
       return saved ? JSON.parse(saved) : {};
     } catch {
@@ -91,15 +136,15 @@ export default function App() {
   const [customError, setCustomError] = useState<string | null>(null);
 
   // Modals
-  const [isMentorModalOpen, setIsMentorModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSavedModalOpen, setIsSavedModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isCertGuideOpen, setIsCertGuideOpen] = useState(false);
 
   // Filter & Search states for courses
   const [courseSearchQuery, setCourseSearchQuery] = useState('');
-  const [selectedProviderFilter, setSelectedProviderFilter] = useState<string>('all');
-  const [selectedDifficultyFilter, setSelectedDifficultyFilter] = useState<string>('all');
+  const [selectedProviderFilter, setSelectedProviderFilter] = useState('all');
+  const [selectedDifficultyFilter, setSelectedDifficultyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'saved' | 'completed'>('all');
 
   // Toasts
@@ -117,7 +162,7 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Sync state to LocalStorage
+  // Sync state to LocalStorage and current user account
   useEffect(() => {
     if (userProfile) {
       localStorage.setItem('ai_learning_user_profile', JSON.stringify(userProfile));
@@ -144,6 +189,24 @@ export default function App() {
     }
   }, [customProfessionData]);
 
+  // Sync current user account when progress or profile changes
+  useEffect(() => {
+    if (currentUserName) {
+      const existing = getUserAccount(currentUserName);
+      if (existing) {
+        const updated: UserAccount = {
+          ...existing,
+          profile: userProfile || undefined,
+          savedCourseIds,
+          completedCourseIds,
+          completedMilestones,
+        };
+        saveUserAccount(updated);
+        setCurrentUserAccount(updated);
+      }
+    }
+  }, [userProfile, savedCourseIds, completedCourseIds, completedMilestones, currentUserName]);
+
   // Current Active Profession Data
   const currentProfession: ProfessionData | null = useMemo(() => {
     if (!userProfile) return null;
@@ -153,9 +216,74 @@ export default function App() {
     return PROFESSIONS_DATA.find((p) => p.id === userProfile.professionId) || PROFESSIONS_DATA[0];
   }, [userProfile, customProfessionData]);
 
+  // Handle Login Success from NameLoginModal
+  const handleLoginSuccess = (account: UserAccount) => {
+    setCurrentUserNameState(account.name);
+    setCurrentUserAccount(account);
+
+    // If account has an existing profile saved, load it
+    if (account.profile) {
+      setUserProfile(account.profile);
+    } else if (userProfile) {
+      // Attach currently open profile to this user account
+      const updatedProfile = { ...userProfile, name: account.name };
+      setUserProfile(updatedProfile);
+      account.profile = updatedProfile;
+      saveUserAccount(account);
+    }
+
+    // Merge or load saved courses
+    if (account.savedCourseIds && account.savedCourseIds.length > 0) {
+      setSavedCourseIds((prev) => Array.from(new Set([...prev, ...(account.savedCourseIds || [])])));
+    } else if (savedCourseIds.length > 0) {
+      account.savedCourseIds = savedCourseIds;
+      saveUserAccount(account);
+    }
+
+    // Merge or load completed courses
+    if (account.completedCourseIds && account.completedCourseIds.length > 0) {
+      setCompletedCourseIds((prev) => Array.from(new Set([...prev, ...(account.completedCourseIds || [])])));
+    } else if (completedCourseIds.length > 0) {
+      account.completedCourseIds = completedCourseIds;
+      saveUserAccount(account);
+    }
+
+    // Merge or load milestones
+    if (account.completedMilestones && Object.keys(account.completedMilestones).length > 0) {
+      setCompletedMilestones((prev) => ({ ...prev, ...(account.completedMilestones || {}) }));
+    } else if (Object.keys(completedMilestones).length > 0) {
+      account.completedMilestones = completedMilestones;
+      saveUserAccount(account);
+    }
+
+    showToast('success', `Welcome, ${account.name}! You are logged in.`);
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    setCurrentUserName(null);
+    setCurrentUserNameState(null);
+    setCurrentUserAccount(null);
+    showToast('info', 'Logged out. You can log in anytime with your name.');
+  };
+
   // Handle Onboarding Submit
   const handleOnboardingSubmit = async (profile: UserProfile) => {
     setUserProfile(profile);
+
+    // If the learner provided a name, automatically log them in or sync their profile
+    if (profile.name && profile.name.trim()) {
+      const cleanName = profile.name.trim();
+      const account = loginOrCreateUser(cleanName, {
+        initialProfile: profile,
+        savedCourseIds,
+        completedCourseIds,
+        completedMilestones
+      });
+      setCurrentUserNameState(cleanName);
+      setCurrentUserAccount(account);
+      showToast('success', `Welcome, ${cleanName}! Profile saved.`);
+    }
 
     // If custom profession, call Gemini API endpoint
     if (profile.professionId === 'custom' && profile.customProfessionTitle) {
@@ -198,40 +326,47 @@ export default function App() {
         setCustomProfessionData(generatedProfession);
         showToast('success', `Created custom pathway for "${profile.customProfessionTitle}"`);
       } catch (err) {
-        console.error('Error generating custom pathway:', err);
-        setCustomError('Could not generate full custom plan with AI. Loaded core AI foundations.');
-        // Fallback to foundational track
-        setCustomProfessionData({
+        console.error(err);
+        setCustomError('Could not connect to AI advisor. Loaded default verified foundations instead.');
+        // Fallback to software engineering template customized
+        const fallbackProf = {
           ...PROFESSIONS_DATA[0],
           id: 'custom',
           title: profile.customProfessionTitle,
-          tagline: `Essential AI Foundations, Tools & Free Credentials for ${profile.customProfessionTitle}`
-        });
+          tagline: `Practical AI Foundations & Free Certificates for ${profile.customProfessionTitle}`
+        };
+        setCustomProfessionData(fallbackProf);
       } finally {
         setIsLoadingCustom(false);
       }
-    } else {
-      const prof = PROFESSIONS_DATA.find(p => p.id === profile.professionId);
-      showToast('success', `Loaded AI Pathway for ${prof?.title || 'your profession'}`);
     }
   };
 
+  // Reset or Switch Profile
   const handleResetProfile = () => {
     setUserProfile(null);
+    setCustomProfessionData(null);
+    setActiveTab('all');
   };
 
+  // Quick switch directly to another standard profession without re-taking form
   const handleSwitchProfession = (profId: string) => {
     if (!userProfile) return;
-    const prof = PROFESSIONS_DATA.find(p => p.id === profId);
-    setUserProfile(prev => prev ? ({ ...prev, professionId: profId, customProfessionTitle: undefined }) : null);
-    showToast('info', `Switched to ${prof?.title || 'new'} curriculum`);
+    const updated: UserProfile = {
+      ...userProfile,
+      professionId: profId,
+      customProfessionTitle: undefined
+    };
+    setUserProfile(updated);
+    setActiveTab('all');
+    showToast('info', `Switched view to ${PROFESSIONS_DATA.find(p => p.id === profId)?.title || 'Role'}`);
   };
 
   // Toggle Save Course with Toast feedback
   const handleToggleSaveCourse = (courseId: string) => {
     setSavedCourseIds((prev) => {
       const isSaved = prev.includes(courseId);
-      showToast('bookmark', isSaved ? 'Removed from saved courses' : 'Saved to your certificate checklist!');
+      showToast('bookmark', isSaved ? 'Removed from saved courses' : 'Added to your saved courses');
       return isSaved ? prev.filter((id) => id !== courseId) : [...prev, courseId];
     });
   };
@@ -297,7 +432,7 @@ export default function App() {
         course.difficulty.toLowerCase() === selectedDifficultyFilter.toLowerCase();
 
       const matchesStatus = 
-        statusFilter === 'all' ||
+        statusFilter === 'all' || 
         (statusFilter === 'saved' && savedCourseIds.includes(course.id)) ||
         (statusFilter === 'completed' && completedCourseIds.includes(course.id));
 
@@ -315,349 +450,472 @@ export default function App() {
     return Array.from(providers);
   }, [currentProfession]);
 
+  const activeTabTitle = {
+    all: 'Dashboard Overview',
+    courses: 'My Courses & Badges',
+    tools: 'AI Tools Directory',
+    roadmap: 'Learning Roadmap',
+    prompts: 'Role Prompt Vault',
+  }[activeTab];
+
+  const handleHighlightSection = (sectionId: string) => {
+    // If no userProfile exists yet, initialize a preview profile so all tabs exist in DOM
+    if (!userProfile) {
+      const defaultProf = PROFESSIONS_DATA[0];
+      setUserProfile({
+        name: currentUserName || 'Guest Learner',
+        professionId: defaultProf.id,
+        experienceLevel: 'beginner',
+        primaryGoal: 'free_certificates',
+        weeklyHours: '3-5',
+        formatPreference: 'all'
+      });
+    }
+
+    if (sectionId === 'bot_intro' || sectionId === 'login') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (sectionId === 'sidebar') {
+      if (window.innerWidth < 1024) {
+        setIsMobileSidebarOpen(true);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else if (sectionId === 'dashboard') {
+      setActiveTab('all');
+      setTimeout(() => {
+        const el = document.getElementById('dashboard-overview-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 60);
+    } else if (sectionId === 'courses') {
+      setActiveTab('courses');
+      setTimeout(() => {
+        const el = document.getElementById('courses-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 60);
+    } else if (sectionId === 'roadmap') {
+      setActiveTab('roadmap');
+      setTimeout(() => {
+        const el = document.getElementById('roadmap-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 60);
+    } else if (sectionId === 'tools') {
+      setActiveTab('tools');
+      setTimeout(() => {
+        const el = document.getElementById('tools-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 60);
+    } else if (sectionId === 'profile') {
+      setTimeout(() => {
+        const panel = document.getElementById('learner-profile-panel');
+        if (panel) {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 60);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50/50 flex flex-col text-slate-900 font-sans antialiased">
-      {/* Top Header */}
-      <Header
-        userProfile={userProfile}
-        onResetProfile={handleResetProfile}
-        onSelectProfessionId={handleSwitchProfession}
-        savedCourseCount={savedCourseIds.length}
-        completedCourseCount={completedCourseIds.length}
-        onOpenSavedModal={() => setIsSavedModalOpen(true)}
-        onOpenMentorModal={() => setIsMentorModalOpen(true)}
-        onOpenCertGuide={() => setIsCertGuideOpen(true)}
-      />
+    <div className="min-h-screen bg-slate-50/50 flex text-slate-900 font-sans antialiased">
+      {/* 1. Left Navigation Sidebar (Figma Online Learning Profile Template) */}
+      {userProfile && (
+        <SidebarNav
+          activeTab={activeTab}
+          onSelectTab={(tab) => setActiveTab(tab)}
+          userProfile={userProfile}
+          userAccount={currentUserAccount}
+          profession={currentProfession}
+          savedCourseCount={savedCourseIds.length}
+          completedCourseCount={completedCourseIds.length}
+          onSelectProfessionId={handleSwitchProfession}
+          onOpenSavedModal={() => setIsSavedModalOpen(true)}
+          onOpenCertGuide={() => setIsCertGuideOpen(true)}
+          onOpenExportModal={() => setIsExportModalOpen(true)}
+          onOpenLoginModal={() => setIsLoginModalOpen(true)}
+          onLogout={handleLogout}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {!userProfile ? (
-          // 1. Intake Onboarding Screen
-          <OnboardingForm 
-            onSubmit={handleOnboardingSubmit} 
-            isLoadingCustom={isLoadingCustom}
-          />
-        ) : isLoadingCustom ? (
-          // Loading Custom AI Generation
-          <div className="max-w-md mx-auto py-24 text-center space-y-4">
-            <div className="w-12 h-12 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-            <h2 className="text-xl font-bold text-slate-900">
-              Generating Tailored AI Pathway for "{userProfile.customProfessionTitle}"
-            </h2>
-            <p className="text-xs text-slate-500">
-              Analyzing industry tasks, curating verified 100% free certificate courses, and mapping out domain tools...
-            </p>
-          </div>
-        ) : currentProfession ? (
-          // 2. Results Screen
-          <div className="space-y-6">
-            {customError && (
-              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl flex items-center justify-between">
-                <span>{customError}</span>
-                <button onClick={() => setCustomError(null)} className="font-bold underline ml-2">Dismiss</button>
-              </div>
-            )}
+      {/* Main Column (Center Content + Right Profile Panel) */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Header Bar */}
+        <Header
+          userProfile={userProfile}
+          userAccount={currentUserAccount}
+          onResetProfile={handleResetProfile}
+          onSelectProfessionId={handleSwitchProfession}
+          savedCourseCount={savedCourseIds.length}
+          completedCourseCount={completedCourseIds.length}
+          onOpenSavedModal={() => setIsSavedModalOpen(true)}
+          onOpenCertGuide={() => setIsCertGuideOpen(true)}
+          onOpenLoginModal={() => setIsLoginModalOpen(true)}
+          onOpenSwitchUser={() => setIsLoginModalOpen(true)}
+          onLogout={handleLogout}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          searchQuery={courseSearchQuery}
+          onSearchChange={setCourseSearchQuery}
+          activeTabTitle={activeTabTitle}
+          onHighlightSection={handleHighlightSection}
+        />
 
-            {/* Profession Banner & Overview */}
-            <ProfessionOverview
-              userProfile={userProfile}
-              profession={currentProfession}
-              onEditProfile={handleResetProfile}
-              onOpenMentorModal={() => setIsMentorModalOpen(true)}
-              onExportPlan={() => setIsExportModalOpen(true)}
-            />
-
-            {/* User-Friendly Learning Progress Widget */}
-            <LearningProgressCard
-              userProfile={userProfile}
-              profession={currentProfession}
-              savedCourseIds={savedCourseIds}
-              completedCourseIds={completedCourseIds}
-              completedMilestones={completedMilestones}
-              onOpenSavedModal={() => setIsSavedModalOpen(true)}
-              onOpenCertGuide={() => setIsCertGuideOpen(true)}
-              onOpenMentorModal={() => setIsMentorModalOpen(true)}
-              onSwitchTab={(t) => setActiveTab(t)}
-            />
-
-            {/* Navigation Tabs */}
-            <div className="border-b border-slate-200 flex items-center gap-2 sm:gap-4 overflow-x-auto pb-px" id="main-nav-tabs">
-              {[
-                { id: 'all', label: 'All Recommended', icon: Layers, count: null },
-                { id: 'courses', label: 'Free Certificates & Badges', icon: Award, count: currentProfession.featuredCourses.length },
-                { id: 'tools', label: 'Essential AI Tools', icon: Wrench, count: currentProfession.topTools.length },
-                { id: 'roadmap', label: 'Step-by-Step Roadmap', icon: Target, count: currentProfession.roadmap.length },
-                { id: 'prompts', label: 'Role Prompt Vault', icon: MessageSquareCode, count: currentProfession.promptTemplates.length },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    id={`tab-btn-${tab.id}`}
-                    className={`inline-flex items-center gap-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
-                      isActive
-                        ? 'border-indigo-600 text-indigo-600'
-                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                    {tab.count !== null && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                        isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {tab.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+        {/* Content Viewport */}
+        <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {!userProfile ? (
+            // Intake Onboarding Screen
+            <div className="max-w-4xl mx-auto">
+              <OnboardingForm 
+                onSubmit={handleOnboardingSubmit} 
+                isLoadingCustom={isLoadingCustom}
+                currentUserName={currentUserName}
+                onOpenLoginModal={() => setIsLoginModalOpen(true)}
+                onSwitchUser={() => setIsLoginModalOpen(true)}
+              />
             </div>
-
-            {/* Tab 1: Comprehensive View ("all") */}
-            {activeTab === 'all' && (
-              <div className="space-y-10">
-                {/* 1. Featured Free Certificate Courses */}
-                <section>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        <Award className="w-5 h-5 text-indigo-600" />
-                        <span>Top Free Certificate Courses & Badges for You</span>
-                      </h2>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Handpicked, 100% free courses with official completion certificates and digital credentials.
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => setActiveTab('courses')}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors self-start sm:self-center cursor-pointer"
-                    >
-                      <span>Explore all {availableCourses.length} courses</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+          ) : isLoadingCustom ? (
+            // Loading Custom AI Generation
+            <div className="max-w-md mx-auto py-24 text-center space-y-4">
+              <div className="w-12 h-12 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+              <h2 className="text-xl font-bold text-slate-900">
+                Generating Tailored AI Pathway for "{userProfile.customProfessionTitle}"
+              </h2>
+              <p className="text-xs text-slate-500">
+                Analyzing industry tasks, curating verified 100% free certificate courses, and mapping out domain tools...
+              </p>
+            </div>
+          ) : currentProfession ? (
+            <div className="flex flex-col xl:flex-row gap-6 items-start">
+              {/* Center Content Column */}
+              <div className="flex-1 min-w-0 space-y-6 w-full">
+                {customError && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl flex items-center justify-between">
+                    <span>{customError}</span>
+                    <button onClick={() => setCustomError(null)} className="font-bold underline ml-2 cursor-pointer">Dismiss</button>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {currentProfession.featuredCourses.slice(0, 3).map((course) => (
-                      <CourseCard
-                        key={course.id}
-                        course={course}
-                        isSaved={savedCourseIds.includes(course.id)}
-                        isCompleted={completedCourseIds.includes(course.id)}
-                        onToggleSave={handleToggleSaveCourse}
-                        onToggleComplete={handleToggleCompleteCourse}
+                {/* Dashboard View (Figma Online Learning Profile Template Hero & KPIs) */}
+                {activeTab === 'all' && (
+                  <div className="space-y-8">
+                    {/* Hero Banner + 4 KPI Stat Cards + Next Up Spotlight */}
+                    <DashboardOverview
+                      userProfile={userProfile}
+                      profession={currentProfession}
+                      savedCourseIds={savedCourseIds}
+                      completedCourseIds={completedCourseIds}
+                      completedMilestones={completedMilestones}
+                      onSwitchTab={(tab) => setActiveTab(tab)}
+                      onOpenCertGuide={() => setIsCertGuideOpen(true)}
+                      onToggleSaveCourse={handleToggleSaveCourse}
+                      onToggleCompleteCourse={handleToggleCompleteCourse}
+                    />
+
+                    {/* Featured Free Certificate Courses Grid */}
+                    <section className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <Award className="w-4 h-4 text-indigo-600" />
+                            <span>Recommended Free Certificate Courses</span>
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            Officially verified courses granting digital credentials upon completion.
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => setActiveTab('courses')}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                        >
+                          <span>Explore all ({availableCourses.length})</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {currentProfession.featuredCourses.slice(0, 3).map((course) => (
+                          <CourseCard
+                            key={course.id}
+                            course={course}
+                            isSaved={savedCourseIds.includes(course.id)}
+                            isCompleted={completedCourseIds.includes(course.id)}
+                            onToggleSave={handleToggleSaveCourse}
+                            onToggleComplete={handleToggleCompleteCourse}
+                          />
+                        ))}
+                      </div>
+                    </section>
+
+                    {/* Top Curated AI Tools for the Role */}
+                    <section className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <Wrench className="w-4 h-4 text-indigo-600" />
+                            <span>Key AI Tools Reshaping {currentProfession.title}</span>
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            High-utility software platforms and models for day-to-day work.
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => setActiveTab('tools')}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                        >
+                          <span>View all {currentProfession.topTools.length} tools</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <ToolsList 
+                        tools={currentProfession.topTools.slice(0, 4)} 
+                        professionTitle={currentProfession.title} 
                       />
-                    ))}
-                  </div>
-                </section>
+                    </section>
 
-                {/* 2. Top AI Tools */}
-                <section>
-                  <ToolsList
-                    tools={currentProfession.topTools}
-                    professionTitle={currentProfession.title}
-                  />
-                </section>
+                    {/* Phased Roadmap Preview */}
+                    <section className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <Target className="w-4 h-4 text-indigo-600" />
+                            <span>Step-by-Step Learning Roadmap</span>
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            Structured milestones paced for {userProfile.weeklyHours} hours per week.
+                          </p>
+                        </div>
 
-                {/* 3. Roadmap Preview */}
-                <section>
-                  <RoadmapTimeline
-                    roadmap={currentProfession.roadmap}
-                    completedMilestones={completedMilestones}
-                    onToggleMilestone={handleToggleMilestone}
-                  />
-                </section>
+                        <button
+                          onClick={() => setActiveTab('roadmap')}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                        >
+                          <span>Full Interactive Roadmap</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
 
-                {/* 4. Prompt Vault Preview */}
-                <section>
-                  <PromptVault
-                    prompts={currentProfession.promptTemplates}
-                    professionTitle={currentProfession.title}
-                  />
-                </section>
-              </div>
-            )}
-
-            {/* Tab 2: Free Certificate Courses Detailed List */}
-            {activeTab === 'courses' && (
-              <div className="space-y-6">
-                {/* Search & Filter Toolbar */}
-                <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="relative flex-1">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={courseSearchQuery}
-                        onChange={(e) => setCourseSearchQuery(e.target.value)}
-                        placeholder="Search courses by keyword, topic, or skill (e.g. Prompt, Python, LLM, Cloud)..."
-                        id="course-search-input"
-                        className="w-full pl-10 pr-9 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                      <RoadmapTimeline
+                        roadmap={currentProfession.roadmap}
+                        completedMilestones={completedMilestones}
+                        onToggleMilestone={handleToggleMilestone}
+                        professionTitle={currentProfession.title}
+                        professionCategory={currentProfession.category}
+                        userName={userProfile.name}
+                        weeklyHours={userProfile.weeklyHours}
+                        completedCoursesCount={completedCourseIds.length}
+                        totalCoursesCount={currentProfession.featuredCourses.length}
+                        keySkills={currentProfession.keySkillsNeeded}
+                        onNotify={showToast}
                       />
-                      {courseSearchQuery && (
-                        <button
-                          onClick={() => setCourseSearchQuery('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Status Filters */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {[
-                        { id: 'all', label: 'All Courses' },
-                        { id: 'saved', label: `Saved (${savedCourseIds.length})` },
-                        { id: 'completed', label: `Completed (${completedCourseIds.length})` },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => setStatusFilter(item.id as any)}
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                            statusFilter === item.id
-                              ? 'bg-indigo-600 text-white shadow-2xs'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
+                    </section>
                   </div>
+                )}
 
-                  {/* Provider & Difficulty Sub-filters */}
-                  <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Provider:</span>
-                      {['all', 'Google Cloud', 'Microsoft Learn', 'IBM SkillsBuild', 'Harvard'].map((prov) => (
-                        <button
-                          key={prov}
-                          onClick={() => setSelectedProviderFilter(prov)}
-                          className={`px-2.5 py-1 text-xs rounded-lg transition-colors cursor-pointer ${
-                            selectedProviderFilter === prov
-                              ? 'bg-slate-900 text-white font-bold'
-                              : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80'
-                          }`}
+                {/* Tab 2: Free Certificates & Badges ("courses") */}
+                {activeTab === 'courses' && (
+                  <div className="space-y-6" id="courses-section">
+                    {/* Search & Filter Controls */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
+                        <div className="relative flex-1 w-full">
+                          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={courseSearchQuery}
+                            onChange={(e) => setCourseSearchQuery(e.target.value)}
+                            placeholder="Search courses by keyword, skills (e.g., Python, Prompt, LLM), or title..."
+                            className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                          />
+                          {courseSearchQuery && (
+                            <button 
+                              onClick={() => setCourseSearchQuery('')}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Status Tabs (All / Saved / Completed) */}
+                        <div className="flex items-center bg-slate-100 p-1 rounded-xl self-stretch sm:self-auto border border-slate-200 text-xs">
+                          <button
+                            onClick={() => setStatusFilter('all')}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                              statusFilter === 'all' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            All ({availableCourses.length})
+                          </button>
+                          <button
+                            onClick={() => setStatusFilter('saved')}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                              statusFilter === 'saved' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Saved ({savedCourseIds.length})
+                          </button>
+                          <button
+                            onClick={() => setStatusFilter('completed')}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                              statusFilter === 'completed' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            Completed ({completedCourseIds.length})
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Secondary dropdown filters */}
+                      <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 text-xs">
+                        <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                          <Filter className="w-3.5 h-3.5" />
+                          <span>Filter by:</span>
+                        </div>
+
+                        {/* Provider Filter */}
+                        <select
+                          value={selectedProviderFilter}
+                          onChange={(e) => setSelectedProviderFilter(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                         >
-                          {prov === 'all' ? 'All Providers' : prov}
-                        </button>
-                      ))}
+                          <option value="all">All Providers ({uniqueProviders.length})</option>
+                          {uniqueProviders.map((p) => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+
+                        {/* Difficulty Filter */}
+                        <select
+                          value={selectedDifficultyFilter}
+                          onChange={(e) => setSelectedDifficultyFilter(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                        >
+                          <option value="all">All Difficulties</option>
+                          <option value="beginner">Beginner</option>
+                          <option value="intermediate">Intermediate</option>
+                          <option value="advanced">Advanced</option>
+                        </select>
+
+                        {(selectedProviderFilter !== 'all' || selectedDifficultyFilter !== 'all' || courseSearchQuery !== '' || statusFilter !== 'all') && (
+                          <button
+                            onClick={() => {
+                              setSelectedProviderFilter('all');
+                              setSelectedDifficultyFilter('all');
+                              setCourseSearchQuery('');
+                              setStatusFilter('all');
+                            }}
+                            className="text-indigo-600 hover:underline font-bold ml-auto cursor-pointer"
+                          >
+                            Reset filters
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={selectedDifficultyFilter}
-                        onChange={(e) => setSelectedDifficultyFilter(e.target.value)}
-                        id="filter-difficulty-select"
-                        className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 cursor-pointer"
-                      >
-                        <option value="all">All Difficulty Levels</option>
-                        <option value="beginner">Beginner</option>
-                        <option value="intermediate">Intermediate</option>
-                        <option value="advanced">Advanced</option>
-                      </select>
-
-                      {(courseSearchQuery || selectedProviderFilter !== 'all' || selectedDifficultyFilter !== 'all' || statusFilter !== 'all') && (
+                    {/* Course Grid */}
+                    {availableCourses.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {availableCourses.map((course) => (
+                          <CourseCard
+                            key={course.id}
+                            course={course}
+                            isSaved={savedCourseIds.includes(course.id)}
+                            isCompleted={completedCourseIds.includes(course.id)}
+                            onToggleSave={handleToggleSaveCourse}
+                            onToggleComplete={handleToggleCompleteCourse}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 space-y-3">
+                        <Award className="w-8 h-8 text-slate-300 mx-auto" />
+                        <h3 className="text-sm font-bold text-slate-700">No courses found matching your criteria</h3>
+                        <p className="text-xs text-slate-500">Try loosening your search terms or clearing filters.</p>
                         <button
                           onClick={() => {
-                            setCourseSearchQuery('');
                             setSelectedProviderFilter('all');
                             setSelectedDifficultyFilter('all');
+                            setCourseSearchQuery('');
                             setStatusFilter('all');
                           }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          title="Reset Filters"
+                          className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors cursor-pointer"
                         >
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Reset</span>
+                          Show All Courses
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
 
-                {/* Course Grid */}
-                {availableCourses.length === 0 ? (
-                  <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl space-y-3">
-                    <Award className="w-10 h-10 text-slate-300 mx-auto" />
-                    <p className="text-sm font-bold text-slate-700">No courses match your active criteria</p>
-                    <p className="text-xs text-slate-500">Try clearing filters or search term to see all available certificates.</p>
-                    <button
-                      onClick={() => {
-                        setCourseSearchQuery('');
-                        setSelectedProviderFilter('all');
-                        setSelectedDifficultyFilter('all');
-                        setStatusFilter('all');
-                      }}
-                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors cursor-pointer"
-                    >
-                      Show All Courses
-                    </button>
+                {/* Tab 3: Essential AI Tools */}
+                {activeTab === 'tools' && (
+                  <div className="space-y-4" id="tools-section">
+                    <div className="bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl text-xs text-indigo-900 flex items-start gap-3">
+                      <Wrench className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                      <p>
+                        These software tools have been vetted specifically for <strong className="font-bold">{currentProfession.title}</strong> workflows. Click any tool to visit their verified site, inspect pricing tiers, or read integration guidance.
+                      </p>
+                    </div>
+                    <ToolsList 
+                      tools={currentProfession.topTools} 
+                      professionTitle={currentProfession.title} 
+                    />
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {availableCourses.map((course) => (
-                      <CourseCard
-                        key={course.id}
-                        course={course}
-                        isSaved={savedCourseIds.includes(course.id)}
-                        isCompleted={completedCourseIds.includes(course.id)}
-                        onToggleSave={handleToggleSaveCourse}
-                        onToggleComplete={handleToggleCompleteCourse}
-                      />
-                    ))}
+                )}
+
+                {/* Tab 4: Step-by-Step Roadmap */}
+                {activeTab === 'roadmap' && (
+                  <div id="roadmap-section">
+                    <RoadmapTimeline
+                      roadmap={currentProfession.roadmap}
+                      completedMilestones={completedMilestones}
+                      onToggleMilestone={handleToggleMilestone}
+                      professionTitle={currentProfession.title}
+                      professionCategory={currentProfession.category}
+                      userName={userProfile.name}
+                      weeklyHours={userProfile.weeklyHours}
+                      completedCoursesCount={completedCourseIds.length}
+                      totalCoursesCount={currentProfession.featuredCourses.length}
+                      keySkills={currentProfession.keySkillsNeeded}
+                      onNotify={showToast}
+                    />
+                  </div>
+                )}
+
+                {/* Tab 5: Role Prompt Vault */}
+                {activeTab === 'prompts' && (
+                  <div id="prompts-section">
+                    <PromptVault
+                      prompts={currentProfession.promptTemplates}
+                      professionTitle={currentProfession.title}
+                    />
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Tab 3: Essential AI Tools */}
-            {activeTab === 'tools' && (
-              <ToolsList
-                tools={currentProfession.topTools}
-                professionTitle={currentProfession.title}
-              />
-            )}
-
-            {/* Tab 4: Step-by-Step Roadmap */}
-            {activeTab === 'roadmap' && (
-              <RoadmapTimeline
-                roadmap={currentProfession.roadmap}
-                completedMilestones={completedMilestones}
-                onToggleMilestone={handleToggleMilestone}
-                professionTitle={currentProfession.title}
-                professionCategory={currentProfession.category}
-                userName={userProfile?.name}
-                completedCoursesCount={completedCourseIds.length}
-                totalCoursesCount={availableCourses.length}
-                keySkills={currentProfession.keySkillsNeeded}
-                onNotify={showToast}
-              />
-            )}
-
-            {/* Tab 5: Role Prompt Vault */}
-            {activeTab === 'prompts' && (
-              <PromptVault
-                prompts={currentProfession.promptTemplates}
-                professionTitle={currentProfession.title}
-              />
-            )}
-          </div>
-        ) : null}
-      </main>
-
-      {/* Floating AI Advisor Action Button */}
-      {userProfile && (
-        <FloatingAdvisorButton
-          onClick={() => setIsMentorModalOpen(true)}
-          professionTitle={currentProfession?.title}
-        />
-      )}
+              {/* Right Column: Online Learning Profile & Activity Panel (Figma Template) */}
+              <div className="w-full xl:w-auto">
+                <LearnerProfilePanel
+                  userProfile={userProfile}
+                  userAccount={currentUserAccount}
+                  profession={currentProfession}
+                  savedCourseIds={savedCourseIds}
+                  completedCourseIds={completedCourseIds}
+                  completedMilestones={completedMilestones}
+                  onOpenSavedModal={() => setIsSavedModalOpen(true)}
+                  onOpenCertGuide={() => setIsCertGuideOpen(true)}
+                  onOpenLoginModal={() => setIsLoginModalOpen(true)}
+                  onEditProfile={handleResetProfile}
+                  onSwitchTab={(tab) => setActiveTab(tab)}
+                />
+              </div>
+            </div>
+          ) : null}
+        </main>
+      </div>
 
       {/* Toast Notification Container */}
       <ToastContainer
@@ -666,15 +924,17 @@ export default function App() {
       />
 
       {/* Modals */}
+      {/* 1. Name Login / Switch User Modal */}
+      <NameLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+        currentUserName={currentUserName}
+      />
+
+      {/* 2. Saved Courses Modal */}
       {currentProfession && userProfile && (
         <>
-          <AIMentorModal
-            isOpen={isMentorModalOpen}
-            onClose={() => setIsMentorModalOpen(false)}
-            professionTitle={currentProfession.title}
-            userProfile={userProfile}
-          />
-
           <SavedCoursesModal
             isOpen={isSavedModalOpen}
             onClose={() => setIsSavedModalOpen(false)}
@@ -693,7 +953,7 @@ export default function App() {
         </>
       )}
 
-      {/* How to Claim Free Certificates Guide Modal */}
+      {/* 3. How to Claim Free Certificates Guide Modal */}
       <CertificateGuideModal
         isOpen={isCertGuideOpen}
         onClose={() => setIsCertGuideOpen(false)}

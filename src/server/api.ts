@@ -57,7 +57,7 @@ Provide:
 2. Impact of AI: Concrete time savings, workflow changes, and productivity benefits.
 3. 5 essential domain-specific AI skills to acquire.
 4. Top 3 AI tools & technologies they should learn to use (with category, practical usage, and real official learning URLs).
-5. 4-5 recommended verified free courses with certificates/badges (use real platforms like Google Cloud Skills Boost, Microsoft Learn, IBM SkillsBuild, Kaggle, Elements of AI, DeepLearning.AI, Harvard CS50).
+5. 4-5 recommended verified free courses with certificates/badges (use real platforms like Google Cloud Skills Boost, Microsoft Learn, IBM SkillsBuild, Kaggle, Elements of AI, DeepLearning.AI, Harvard CS50). IMPORTANT: Each course "url" MUST link directly to the specific course page or student login/classroom portal (e.g. https://www.cloudskillsboost.google/course_templates/536, https://learn.deeplearning.ai/courses/chatgpt-prompt-engineering-for-developers, https://course.elementsofai.com/, https://www.kaggle.com/learn/intro-to-machine-learning, https://www.netacad.com/courses/ai-fundamentals), NOT a generic company homepage or marketing domain.
 6. A 4-phase structured roadmap (duration, objectives, concrete action items, milestones).
 7. 2 ready-to-use high-impact AI prompt templates with realistic scenarios and expected outcomes.`;
 

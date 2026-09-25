@@ -174,8 +174,9 @@ export const CourseCard: React.FC<CourseCardProps> = ({
           rel="noopener noreferrer"
           id={`launch-course-link-${course.id}`}
           className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 rounded-xl shadow-xs hover:shadow transition-all"
+          title={`Direct link to ${course.title} course player and student login`}
         >
-          <span>Free Official Course</span>
+          <span>Direct Course & Login</span>
           <ExternalLink className="w-3.5 h-3.5" />
         </a>
       </div>

@@ -10,7 +10,6 @@ interface LearningProgressCardProps {
   completedMilestones: Record<number, boolean>;
   onOpenSavedModal: () => void;
   onOpenCertGuide: () => void;
-  onOpenMentorModal: () => void;
   onSwitchTab: (tabId: 'courses' | 'tools' | 'roadmap' | 'prompts') => void;
 }
 
@@ -22,7 +21,6 @@ export const LearningProgressCard: React.FC<LearningProgressCardProps> = ({
   completedMilestones,
   onOpenSavedModal,
   onOpenCertGuide,
-  onOpenMentorModal,
   onSwitchTab,
 }) => {
   const totalCourses = profession.featuredCourses.length;

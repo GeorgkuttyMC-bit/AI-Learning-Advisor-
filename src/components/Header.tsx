@@ -1,37 +1,74 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Bookmark, MessageSquare, Briefcase, Award, ChevronDown, ShieldCheck, Check } from 'lucide-react';
-import { UserProfile } from '../types';
+import { 
+  Sparkles, 
+  Bookmark, 
+  Briefcase, 
+  Award, 
+  ChevronDown, 
+  ShieldCheck, 
+  Check, 
+  User, 
+  LogIn, 
+  Menu,
+  Search,
+  Share2,
+  ExternalLink
+} from 'lucide-react';
+import { UserProfile, UserAccount } from '../types';
 import { PROFESSIONS_DATA } from '../data/professions';
+import { UserProfileMenu } from './UserProfileMenu';
+import { VoiceOverGuide } from './VoiceOverGuide';
 
 interface HeaderProps {
   userProfile: UserProfile | null;
+  userAccount: UserAccount | null;
   onResetProfile: () => void;
   onSelectProfessionId?: (profId: string) => void;
   savedCourseCount: number;
   completedCourseCount?: number;
   onOpenSavedModal: () => void;
-  onOpenMentorModal: () => void;
   onOpenCertGuide: () => void;
+  onOpenLoginModal: () => void;
+  onOpenSwitchUser: () => void;
+  onLogout: () => void;
+  onToggleMobileSidebar?: () => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  activeTabTitle?: string;
+  onHighlightSection?: (sectionId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   userProfile,
+  userAccount,
   onResetProfile,
   onSelectProfessionId,
   savedCourseCount,
   completedCourseCount = 0,
   onOpenSavedModal,
-  onOpenMentorModal,
   onOpenCertGuide,
+  onOpenLoginModal,
+  onOpenSwitchUser,
+  onLogout,
+  onToggleMobileSidebar,
+  searchQuery = '',
+  onSearchChange,
+  activeTabTitle = 'Dashboard',
+  onHighlightSection
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
+      }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -40,131 +77,117 @@ export const Header: React.FC<HeaderProps> = ({
 
   const currentProf = PROFESSIONS_DATA.find(p => p.id === userProfile?.professionId);
   const currentTitle = userProfile?.customProfessionTitle || currentProf?.title || 'Select Role';
+  const displayName = userAccount?.name || userProfile?.name || 'Learner';
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand Logo */}
-        <div 
-          onClick={onResetProfile}
-          className="flex items-center gap-3 cursor-pointer group"
-          id="nav-logo"
-        >
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-700 to-purple-600 flex items-center justify-center text-white shadow-sm shadow-indigo-100 group-hover:scale-105 transition-transform">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-slate-900 tracking-tight text-base sm:text-lg">
-                AI Learning Navigator
-              </span>
-              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                <Award className="w-3 h-3 text-emerald-600" /> Free Verified Badges
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 hidden md:block">
-              Role-Specific AI Education, Tools & Verified Credentials
-            </p>
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
+      <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        {/* Left Zone: Mobile Hamburger + Breadcrumb */}
+        <div className="flex items-center gap-3">
+          {onToggleMobileSidebar && (
+            <button
+              onClick={onToggleMobileSidebar}
+              className="lg:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl cursor-pointer"
+              aria-label="Open menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* Breadcrumb / Title */}
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <span className="text-slate-400 hidden sm:inline">Learning Profile</span>
+            <span className="text-slate-300 hidden sm:inline">/</span>
+            <span className="text-slate-900 font-bold">{activeTabTitle}</span>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Direct Role Switcher Dropdown (when logged into a role) */}
-          {userProfile && (
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                id="header-switch-profession-dropdown-btn"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer max-w-[170px] sm:max-w-[220px]"
-                title="Switch to another profession"
-              >
-                <Briefcase className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span className="truncate">{currentTitle}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              </button>
+        {/* Center Zone: Global Search Bar */}
+        <div className="hidden md:flex flex-1 max-w-md mx-4">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              placeholder="Search courses, free certificates, AI tools..."
+              className="w-full pl-9 pr-4 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-900"
+            />
+          </div>
+        </div>
 
-              {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-3 py-2 border-b border-slate-100">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Quick Switch Profession</div>
-                    <div className="text-xs text-slate-500">Jump directly to another curriculum</div>
-                  </div>
+        {/* Right Zone: Actions & Profile */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Top Voice Over Guide (Malayalam & English Male Voice Toggle) */}
+          <VoiceOverGuide 
+            onHighlightSection={onHighlightSection} 
+            onOpenLoginModal={onOpenLoginModal}
+          />
 
-                  <div className="max-h-64 overflow-y-auto py-1">
-                    {PROFESSIONS_DATA.map((p) => {
-                      const isSelected = p.id === userProfile.professionId;
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            onSelectProfessionId?.(p.id);
-                            setIsDropdownOpen(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                            isSelected ? 'bg-indigo-50/70 font-bold text-indigo-700' : 'text-slate-700 font-medium'
-                          }`}
-                        >
-                          <span className="truncate pr-2">{p.title}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="p-2 border-t border-slate-100 bg-slate-50/50">
-                    <button
-                      onClick={() => {
-                        onResetProfile();
-                        setIsDropdownOpen(false);
-                      }}
-                      className="w-full text-center px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
-                    >
-                      + Custom Job Title / Reconfigure
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* How Free Badges Work Guide Button */}
+          {/* Certificate Guide Pill */}
           <button
             onClick={onOpenCertGuide}
-            id="header-cert-guide-btn"
-            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 rounded-xl transition-colors cursor-pointer"
-            title="Step-by-step instructions to get free certificates"
+            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors cursor-pointer"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Badge Guide</span>
+            <span>Certificates</span>
           </button>
 
           {/* Saved Courses Button */}
           <button
             onClick={onOpenSavedModal}
-            id="header-saved-courses-btn"
-            className="relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
-            title="Saved Courses & Badges Checklist"
+            id="nav-saved-courses-btn"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors cursor-pointer"
           >
-            <Bookmark className="w-3.5 h-3.5 text-indigo-600" />
+            <Bookmark className="w-3.5 h-3.5 text-amber-500" />
             <span className="hidden sm:inline">Saved</span>
             {savedCourseCount > 0 && (
-              <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-extrabold text-white bg-indigo-600 rounded-full shadow-2xs">
+              <span className="px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800 text-[10px] font-mono font-bold tabular-nums">
                 {savedCourseCount}
               </span>
             )}
           </button>
 
-          {/* AI Advisor Button */}
-          <button
-            onClick={onOpenMentorModal}
-            id="header-ask-mentor-btn"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 rounded-xl shadow-xs transition-all cursor-pointer"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Ask AI Advisor</span>
-            <span className="sm:hidden">Advisor</span>
-          </button>
+          {/* User Account / Profile Menu Pill */}
+          <div className="relative" ref={profileMenuRef}>
+            {userAccount ? (
+              <button
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                id="header-user-profile-btn"
+                className="inline-flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                  {userAccount.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-xs font-bold text-slate-800 hidden sm:inline max-w-[100px] truncate">
+                  {userAccount.name}
+                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400 hidden sm:inline" />
+              </button>
+            ) : (
+              <button
+                onClick={onOpenLoginModal}
+                id="header-login-btn"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Log In</span>
+              </button>
+            )}
+
+            {/* User Profile Dropdown Menu */}
+            <UserProfileMenu
+              isOpen={isProfileMenuOpen}
+              onClose={() => setIsProfileMenuOpen(false)}
+              userAccount={userAccount}
+              userProfile={userProfile}
+              completedCoursesCount={completedCourseCount}
+              savedCoursesCount={savedCourseCount}
+              onOpenSwitchUser={onOpenSwitchUser}
+              onOpenResetRole={onResetProfile}
+              onLogout={onLogout}
+            />
+          </div>
         </div>
       </div>
     </header>

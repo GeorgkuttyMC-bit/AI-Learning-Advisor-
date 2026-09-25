@@ -20,7 +20,6 @@ interface ProfessionOverviewProps {
   userProfile: UserProfile;
   profession: ProfessionData;
   onEditProfile: () => void;
-  onOpenMentorModal: () => void;
   onExportPlan: () => void;
 }
 
@@ -28,7 +27,6 @@ export const ProfessionOverview: React.FC<ProfessionOverviewProps> = ({
   userProfile,
   profession,
   onEditProfile,
-  onOpenMentorModal,
   onExportPlan
 }) => {
   const visual = PROFESSION_VISUALS[profession.id] || {
@@ -63,18 +61,9 @@ export const ProfessionOverview: React.FC<ProfessionOverviewProps> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={onOpenMentorModal}
-              id="overview-ask-mentor-btn"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600/90 hover:bg-indigo-600 border border-indigo-400/40 rounded-xl shadow-sm backdrop-blur-md transition-all active:scale-95"
-            >
-              <Bot className="w-3.5 h-3.5 text-indigo-200" />
-              <span>Ask AI Career Advisor</span>
-            </button>
-
-            <button
               onClick={onExportPlan}
               id="overview-export-btn"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl backdrop-blur-md transition-all"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl backdrop-blur-md transition-all cursor-pointer"
               title="Download or share this learning plan"
             >
               <Share2 className="w-3.5 h-3.5 text-slate-300" />

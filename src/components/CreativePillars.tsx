@@ -1,8 +1,8 @@
 import React from 'react';
-import { Sparkles, Award, Bot, ArrowRight, ShieldCheck, Zap, Compass, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Award, Zap, Compass, CheckCircle2, ArrowRight } from 'lucide-react';
 
 interface CreativePillarsProps {
-  onSelectAction?: (actionType: 'curriculum' | 'certificates' | 'mentor') => void;
+  onSelectAction?: (actionType: 'curriculum' | 'certificates' | 'toolkit') => void;
 }
 
 export const CreativePillars: React.FC<CreativePillarsProps> = ({ onSelectAction }) => {
@@ -38,19 +38,19 @@ export const CreativePillars: React.FC<CreativePillarsProps> = ({ onSelectAction
       actionLabel: 'View Free Badges',
     },
     {
-      id: 'mentor' as const,
-      icon: Bot,
+      id: 'toolkit' as const,
+      icon: Compass,
       iconBg: 'from-blue-600 to-cyan-500 text-white shadow-blue-200/50',
-      badgeText: '24/7 Gemini Advisor',
+      badgeText: 'Prompts & Roadmaps',
       badgeColor: 'bg-blue-50 text-blue-700 border-blue-200/70',
-      title: 'Intelligent AI Career Copilot',
-      subtitle: 'Real-time workplace guidance',
-      description: 'Ask deep domain questions, clarify ethical and data privacy constraints, and get instant recommendations for your daily tasks.',
-      imageUrl: 'https://images.unsplash.com/photo-1677442136019-21780efad99a?auto=format&fit=crop&w=800&q=80',
-      imageAlt: 'Futuristic intelligent AI copilot interface concept',
-      features: ['Personalized study plan', 'Scenario prompt debugging', 'Always available'],
+      title: 'Workplace Prompts & Toolkits',
+      subtitle: 'Production-ready practical assets',
+      description: 'Copy-paste scenario prompt templates, curated software directories, and milestone pacing tailored to your weekly study goals.',
+      imageUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80',
+      imageAlt: 'High-tech data and connectivity visualization',
+      features: ['Scenario prompt templates', 'Vetted domain software', 'Progress checkpointing'],
       accentBorder: 'hover:border-blue-400 group-hover:shadow-blue-100',
-      actionLabel: 'Consult AI Mentor',
+      actionLabel: 'Explore Toolkits & Prompts',
     },
   ];
 
@@ -68,7 +68,7 @@ export const CreativePillars: React.FC<CreativePillarsProps> = ({ onSelectAction
           </h2>
         </div>
         <p className="text-xs sm:text-sm text-slate-500 max-w-md">
-          Combining role-calibrated education, verified no-cost credentials, and intelligent mentor assistance.
+          Combining role-calibrated education, verified no-cost credentials, and production workplace toolkits.
         </p>
       </div>
 
@@ -100,48 +100,41 @@ export const CreativePillars: React.FC<CreativePillarsProps> = ({ onSelectAction
                     <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${pillar.iconBg} flex items-center justify-center shadow-lg border border-white/20 group-hover:scale-110 transition-transform`}>
                       <IconComponent className="w-5 h-5 text-white" />
                     </div>
-                    <div>
-                      <span className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full border backdrop-blur-md bg-white/90 ${pillar.badgeColor}`}>
-                        {pillar.badgeText}
-                      </span>
-                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border backdrop-blur-md bg-white/90 shadow-xs ${pillar.badgeColor}`}>
+                      {pillar.badgeText}
+                    </span>
                   </div>
                 </div>
 
-                {/* Content Body */}
-                <div className="p-5 sm:p-6 space-y-3">
-                  <div>
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug">
-                      {pillar.title}
-                    </h3>
-                    <p className="text-xs font-medium text-indigo-600 mt-0.5">
-                      {pillar.subtitle}
-                    </p>
-                  </div>
-
-                  <p className="text-xs text-slate-600 leading-relaxed">
+                {/* Content */}
+                <div className="p-5">
+                  <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                    {pillar.title}
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-400 mt-0.5">
+                    {pillar.subtitle}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
                     {pillar.description}
                   </p>
 
                   {/* Feature Checklist */}
-                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                    {pillar.features.map((feature, fIdx) => (
-                      <div key={fIdx} className="flex items-center gap-2 text-xs text-slate-700">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-medium text-[11px]">{feature}</span>
+                  <div className="mt-4 pt-3 border-t border-slate-100 space-y-1.5">
+                    {pillar.features.map((feat, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-xs text-slate-600">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span>{feat}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {/* Bottom Action Footer */}
-              <div className="px-5 sm:px-6 pb-5 pt-2">
-                <div className="flex items-center justify-between text-xs font-semibold text-indigo-600 group-hover:text-indigo-800 transition-colors pt-3 border-t border-slate-100">
+              {/* Action Link Footer */}
+              <div className="px-5 pb-5 pt-2">
+                <div className="flex items-center justify-between text-xs font-bold text-indigo-600 group-hover:text-indigo-700 pt-2 border-t border-slate-100">
                   <span>{pillar.actionLabel}</span>
-                  <div className="w-7 h-7 rounded-lg bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-all">
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </div>
+                  <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
             </div>
